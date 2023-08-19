@@ -1,0 +1,12 @@
+{
+  "name": "abg.entities",
+  "displayName": "Abg.Entities",
+  "version": "0.0.1",
+  "description": "ECS",
+  "keywords": [
+    "properties",
+    "binding",
+    "mvvm"
+  ],
+  "unity": "2019.4"
+}
