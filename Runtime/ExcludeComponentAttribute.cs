@@ -2,7 +2,7 @@
 
 namespace Abg.Entities
 {
-    [AttributeUsage(AttributeTargets.Interface)]
+    [AttributeUsage(AttributeTargets.Interface, AllowMultiple = true)]
     public class ExcludeComponentAttribute : Attribute
     {
         public readonly Type Type;

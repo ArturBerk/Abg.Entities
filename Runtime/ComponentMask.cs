@@ -150,11 +150,13 @@ namespace Abg.Entities
 
                     if (maxComponentIndexRecalculationRequired)
                     {
-                        maxComponentIndex = -1;
+                        var newMaxComponentIndex = -1;
                         foreach (var componentIndex in this)
                         {
-                            if (maxComponentIndex < componentIndex) maxComponentIndex = componentIndex;
+                            if (newMaxComponentIndex < componentIndex) newMaxComponentIndex = componentIndex;
                         }
+
+                        maxComponentIndex = newMaxComponentIndex;
                     }
                 }
             }

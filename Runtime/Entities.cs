@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Abg.Entities
 {
@@ -10,7 +11,7 @@ namespace Abg.Entities
         private readonly ComponentMask includeMask;
         private readonly ComponentMask excludeMask;
 
-        private IEntityCollection[] collections = Array.Empty<IEntityCollection>();
+        private EntityCollection[] collections = Array.Empty<EntityCollection>();
         private ushort collectionsVersion = 0;
 
         public Entities(EntityWorld world, Type[] includeTypes, Type[] excludeTypes)
@@ -20,18 +21,33 @@ namespace Abg.Entities
             excludeMask = ComponentMask.PooledFromTypes(excludeTypes, excludeTypes.Length);
         }
 
-        public IReadOnlyList<IEntityCollection> PrepareCollections()
+        public int GetCount(bool includeDisabled = false)
         {
-            if (collectionsVersion != world.version)
+            Invalidate();
+            var count = 0;
+            foreach (EntityCollection collection in collections)
             {
-                collections = world.Collections
-                    .Where(c => c.ComponentMask.Includes(includeMask) && c.ComponentMask.Excludes(excludeMask))
-                    .Cast<IEntityCollection>()
-                    .ToArray();
-                collectionsVersion = world.version;
+                count += collection.GetCount(includeDisabled);
             }
 
+            return count;
+        }
+
+        public IReadOnlyList<EntityCollection> PrepareCollections()
+        {
+            Invalidate();
+
             return collections;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void Invalidate()
+        {
+            if (collectionsVersion == world.version) return;
+            collections = world.Collections
+                .Where(c => c.ComponentMask.Includes(includeMask) && c.ComponentMask.Excludes(excludeMask))
+                .ToArray();
+            collectionsVersion = world.version;
         }
     }
 }

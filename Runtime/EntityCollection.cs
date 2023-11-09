@@ -1,47 +1,61 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace Abg.Entities
 {
-    public interface IEntityCollection
-    {
-        int Count { get; }
-        Entity GetEntity(int entityIndexInCollection);
-        ComponentAccessor<T> GetComponents<T>();
-    }
+    // public interface IEntityCollection
+    // {
+    //     int GetCount(bool includeDisabled = false);
+    //     Entity GetEntity(int entityIndexInCollection);
+    //     Entity GetEntity(int entityIndexInCollection);
+    //     ComponentAccessor<T> GetComponents<T>();
+    // }
 
-    internal class EntityCollection : IEntityCollection
+    public sealed class EntityCollection
     {
         private readonly EntityWorld world;
         private readonly int startComponentIndex;
         private readonly int endComponentIndex;
         private readonly IComponentCollection[] components;
         private ArrayList<Entity> entities = new ArrayList<Entity>(128);
+        private Bits bits;
 
-        public readonly ComponentMask ComponentMask;
-        public readonly int[] ComponentIndices;
-        public int Count => entities.Count;
-        
+        internal readonly ComponentMask ComponentMask;
+        internal readonly int[] ComponentIndices;
+        public int Count
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => entities.Count - bits.DisabledCount;
+        }
+
         internal IComponentCollection GetComponents(int componentIndex)
         {
             return components[componentIndex - startComponentIndex];
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int GetCount(bool includeDisabled = false)
+        {
+            return includeDisabled ? entities.Count : entities.Count - bits.DisabledCount;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Entity GetEntity(int entityIndexInCollection)
         {
             return entities[entityIndexInCollection];
         }
 
-        internal ComponentCollection<T> GetComponents<T>()
+        internal ComponentCollection<T> GetComponentsInternal<T>()
         {
             return (ComponentCollection<T>)components[ComponentIndex<T>.Value - startComponentIndex];
         }
 
-        ComponentAccessor<T> IEntityCollection.GetComponents<T>()
+        public ComponentAccessor<T> GetComponents<T>()
         {
             return new ComponentAccessor<T>((ComponentCollection<T>)components[ComponentIndex<T>.Value - startComponentIndex]);
         }
 
-        public EntityCollection(ComponentMask componentMask)
+        internal EntityCollection(ComponentMask componentMask)
         {
             this.ComponentMask = componentMask;
             endComponentIndex = 0;
@@ -69,12 +83,27 @@ namespace Abg.Entities
             {
                 components[index - startComponentIndex] = ComponentCollectionFactories.factories[index].Create();
             }
+
+            bits = new Bits(4);
         }
 
-        public int AddEntity(Entity entity)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void SetEntityEnabled(int entityIndexInCollection, bool state)
+        {
+            bits[entityIndexInCollection] = state;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool GetEntityEnabled(int entityIndexInCollection)
+        {
+            return bits[entityIndexInCollection];
+        }
+
+        internal int AddEntity(Entity entity, bool enabled)
         {
             var index = entities.Count;
             entities.Add(entity);
+            bits[index] = enabled;
 
             foreach (var componentIndex in ComponentIndices)
             {
@@ -84,8 +113,13 @@ namespace Abg.Entities
             return index;
         }
 
-        public void RemoveEntity(int entityIndexInCollection)
+        internal void RemoveEntity(int entityIndexInCollection)
         {
+            if (entityIndexInCollection < entities.Count - 1)
+            {
+                bits[entityIndexInCollection] = bits[entities.Count - 1];
+                bits[entities.Count - 1] = true;
+            }
             entities.UnorderedRemoveAt(entityIndexInCollection);
             foreach (var componentIndex in ComponentIndices)
             {

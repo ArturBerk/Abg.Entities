@@ -7,6 +7,8 @@ namespace Abg.Entities
 {
     public sealed class EntityWorld
     {
+        private Dictionary<Type, Entities> entityGroups = new Dictionary<Type, Entities>();
+
         private Dictionary<ComponentMask, EntityCollection> entityCollections =
             new Dictionary<ComponentMask, EntityCollection>();
 
@@ -16,6 +18,16 @@ namespace Abg.Entities
         internal ushort version;
 
         internal IEnumerable<EntityCollection> Collections => entityCollections.Values;
+
+        public T GetEntityGroup<T>() where T : Entities
+        {
+            if (entityGroups.TryGetValue(typeof(T), out var group)) return (T)group;
+
+            group = (Entities)Activator.CreateInstance(typeof(T), this);
+            entityGroups.Add(typeof(T), group);
+
+            return (T)group;
+        }
 
         public EntityWorld()
         {
@@ -69,7 +81,7 @@ namespace Abg.Entities
             ref EntityContainer entityContainer = ref entities[entityIndex];
             var entity = new Entity(entityIndex, entityContainer.Version);
             entityContainer.Collection = entityCollection;
-            entityContainer.CollectionIndex = entityCollection.AddEntity(entity);
+            entityContainer.CollectionIndex = entityCollection.AddEntity(entity, true);
 
             return entity;
         }
@@ -84,6 +96,20 @@ namespace Abg.Entities
 
             freeEntities.Enqueue(entity.Index);
         }
+        
+        public void SetEntityEnabled(Entity entity, bool state)
+        {
+            CheckEntity(entity);
+            ref var container = ref entities[entity.Index];
+            container.Collection.SetEntityEnabled(container.CollectionIndex, state);
+        }
+
+        public bool GetEntityEnabled(Entity entity)
+        {
+            CheckEntity(entity);
+            ref var container = ref entities[entity.Index];
+            return container.Collection.GetEntityEnabled(container.CollectionIndex);
+        }
 
         public void SetComponent<T>(Entity entity, T component = default)
         {
@@ -94,7 +120,7 @@ namespace Abg.Entities
             var sourceCollection = container.Collection;
             if (container.Collection.ComponentMask[newComponentIndex])
             {
-                sourceCollection.GetComponents<T>().Set(container.CollectionIndex, component);
+                sourceCollection.GetComponentsInternal<T>().Set(container.CollectionIndex, component);
                 return;
             }
 
@@ -102,7 +128,7 @@ namespace Abg.Entities
             var destCollection = GetCollectionFromMask(destMask);
 
             CopyEntity(entity, ref container, sourceCollection, destCollection);
-            destCollection.GetComponents<T>().Set(container.CollectionIndex, component);
+            destCollection.GetComponentsInternal<T>().Set(container.CollectionIndex, component);
         }
 
         private void CopyEntity(Entity entity, ref EntityContainer container,
@@ -110,11 +136,13 @@ namespace Abg.Entities
         {
             var indexInSourceCollection = container.CollectionIndex;
             container.Collection = destCollection;
-            container.CollectionIndex = destCollection.AddEntity(entity);
+            var state = sourceCollection.GetEntityEnabled(indexInSourceCollection);
+            container.CollectionIndex = destCollection.AddEntity(entity, state);
             foreach (var componentIndex in sourceCollection.ComponentIndices)
             {
-                sourceCollection.GetComponents(componentIndex).CopyTo(indexInSourceCollection,
-                    destCollection.GetComponents(componentIndex), container.CollectionIndex);
+                if (destCollection.ComponentMask[componentIndex])
+                    sourceCollection.GetComponents(componentIndex).CopyTo(indexInSourceCollection,
+                        destCollection.GetComponents(componentIndex), container.CollectionIndex);
             }
 
             sourceCollection.RemoveEntity(indexInSourceCollection);
@@ -126,7 +154,7 @@ namespace Abg.Entities
             if (entities.Count <= entity.Index || entities[entity.Index].Version != entity.Version)
                 throw new Exception("Entity not found");
         }
-        
+
         public bool Exists(Entity entity)
         {
             return entities.Count > entity.Index && entities[entity.Index].Version == entity.Version;
@@ -144,7 +172,7 @@ namespace Abg.Entities
             CheckEntity(entity);
             ref var container = ref entities[entity.Index];
             return ref container.Collection
-                .GetComponents<T>()
+                .GetComponentsInternal<T>()
                 .GetComponent(container.CollectionIndex);
         }
 
@@ -186,7 +214,7 @@ namespace Abg.Entities
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public EntityBuilder WithComponent<T>()
+            public EntityBuilder With<T>()
             {
                 types.Add(ComponentCollectionFactories<T>.InitializeType);
                 return this;

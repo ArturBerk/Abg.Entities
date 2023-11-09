@@ -11,109 +11,179 @@ namespace Abg.Entities
     public class SystemsRoot : IEnumerable<ISystem>, IDisposable
     {
         public static SystemsRootBuilder Builder => new SystemsRootBuilder();
-        
+
+        private List<SystemGroup> earlyUpdateGroups;
+        private List<SystemGroup> updateGroups;
+        private List<SystemGroup> lateUpdateGroups;
+        private List<SystemGroup> fixedUpdateGroups;
+
         private readonly EntityWorld world;
-        private readonly SystemGroup earlyUpdate;
-        private readonly SystemGroup update;
-        private readonly SystemGroup lateUpdate;
-        private readonly SystemGroup fixedUpdate;
 
-        public SystemGroup EarlyUpdate => earlyUpdate;
-        public SystemGroup Update => update;
-        public SystemGroup LateUpdate => lateUpdate;
-        public SystemGroup FixedUpdate => fixedUpdate;
-
-
-        internal SystemsRoot(EntityWorld world,
-            SystemGroup earlyUpdate,
-            SystemGroup update,
-            SystemGroup lateUpdate,
-            SystemGroup fixedUpdate)
+        internal SystemsRoot(EntityWorld world)
         {
             this.world = world;
-            this.earlyUpdate = earlyUpdate;
-            this.update = update;
-            this.lateUpdate = lateUpdate;
-            this.fixedUpdate = fixedUpdate;
+        }
 
-            earlyUpdate?.OnInit(this.world);
-            update?.OnInit(this.world);
-            lateUpdate?.OnInit(this.world);
-            fixedUpdate?.OnInit(this.world);
+        public void Start()
+        {
+            if (earlyUpdateGroups != null)
+            {
+                foreach (SystemGroup group in earlyUpdateGroups)
+                {
+                    group.OnInit(world);
+                }
+            }
+
+            if (updateGroups != null)
+            {
+                foreach (SystemGroup group in updateGroups)
+                {
+                    group.OnInit(world);
+                }
+            }
+
+            if (lateUpdateGroups != null)
+            {
+                foreach (SystemGroup group in lateUpdateGroups)
+                {
+                    group.OnInit(world);
+                }
+            }
+
+            if (fixedUpdateGroups != null)
+            {
+                foreach (SystemGroup group in fixedUpdateGroups)
+                {
+                    group.OnInit(world);
+                }
+            }
 
             PlayerLoopExtensions.ModifyCurrentPlayerLoop((ref PlayerLoopSystem system) =>
             {
-                if (earlyUpdate != null)
+                if (earlyUpdateGroups != null)
                 {
                     system.GetSystem<EarlyUpdate>().AddSystem<SystemsRoot>(OnEarlyUpdate);
                 }
 
-                if (update != null)
+                if (updateGroups != null)
                 {
                     system.GetSystem<Update>().AddSystem<SystemsRoot>(OnUpdate);
                 }
 
-                if (lateUpdate != null)
+                if (lateUpdateGroups != null)
                 {
                     system.GetSystem<PreLateUpdate>().AddSystem<SystemsRoot>(OnLateUpdate);
                 }
 
-                if (lateUpdate != null)
+                if (fixedUpdateGroups != null)
                 {
                     system.GetSystem<FixedUpdate>().AddSystem<SystemsRoot>(OnFixedUpdate);
                 }
             });
         }
 
+        internal void AddEarlyUpdateGroup(SystemGroup system)
+        {
+            if (updateGroups == null) updateGroups = new List<SystemGroup>(4);
+            updateGroups.Add(system);
+        }
+
+        internal void AddUpdateGroup(SystemGroup system)
+        {
+            if (updateGroups == null) updateGroups = new List<SystemGroup>(4);
+            updateGroups.Add(system);
+        }
+
+        internal void AddLateUpdateGroup(SystemGroup system)
+        {
+            if (lateUpdateGroups == null) lateUpdateGroups = new List<SystemGroup>(4);
+            lateUpdateGroups.Add(system);
+        }
+
+        internal void AddFixedUpdateGroup(SystemGroup system)
+        {
+            if (fixedUpdateGroups == null) fixedUpdateGroups = new List<SystemGroup>(4);
+            fixedUpdateGroups.Add(system);
+        }
+
         private void OnEarlyUpdate()
         {
-            earlyUpdate.OnTick(new TimeData(Time.time, Time.smoothDeltaTime));
+            foreach (SystemGroup group in earlyUpdateGroups)
+            {
+                group.OnTick(new TimeData(Time.time, Time.smoothDeltaTime));
+            }
         }
 
         private void OnUpdate()
         {
-            update.OnTick(new TimeData(Time.time, Time.smoothDeltaTime));
+            foreach (SystemGroup group in updateGroups)
+            {
+                group.OnTick(new TimeData(Time.time, Time.smoothDeltaTime));
+            }
         }
 
         private void OnLateUpdate()
         {
-            lateUpdate.OnTick(new TimeData(Time.time, Time.smoothDeltaTime));
+            foreach (SystemGroup group in lateUpdateGroups)
+            {
+                group.OnTick(new TimeData(Time.time, Time.smoothDeltaTime));
+            }
         }
 
         private void OnFixedUpdate()
         {
-            fixedUpdate.OnTick(new TimeData(Time.fixedTime, Time.fixedDeltaTime));
+            foreach (SystemGroup group in fixedUpdateGroups)
+            {
+                group.OnTick(new TimeData(Time.time, Time.fixedDeltaTime));
+            }
+        }
+
+        public void Stop()
+        {
+            PlayerLoopExtensions.ModifyCurrentPlayerLoop((ref PlayerLoopSystem system) =>
+            {
+                system.GetSystem<EarlyUpdate>().RemoveSystem<SystemsRoot>(false);
+                system.GetSystem<Update>().RemoveSystem<SystemsRoot>(false);
+                system.GetSystem<PreLateUpdate>().RemoveSystem<SystemsRoot>(false);
+                system.GetSystem<FixedUpdate>().RemoveSystem<SystemsRoot>(false);
+            });
         }
 
         public void Dispose()
         {
-            earlyUpdate?.OnDestroy(world);
-            update?.OnDestroy(world);
-            lateUpdate?.OnDestroy(world);
-            fixedUpdate?.OnDestroy(world);
-
-            PlayerLoopExtensions.ModifyCurrentPlayerLoop((ref PlayerLoopSystem system) =>
+            Stop();
+            
+            if (earlyUpdateGroups != null)
             {
-                if (earlyUpdate != null)
+                foreach (SystemGroup group in earlyUpdateGroups)
                 {
-                    system.GetSystem<EarlyUpdate>().RemoveSystem<SystemsRoot>(false);
+                    group.OnDestroy(world);
                 }
+            }
 
-                if (update != null)
+            if (updateGroups != null)
+            {
+                foreach (SystemGroup group in updateGroups)
                 {
-                    system.GetSystem<Update>().RemoveSystem<SystemsRoot>(false);
+                    group.OnDestroy(world);
                 }
+            }
 
-                if (lateUpdate != null)
+            if (lateUpdateGroups != null)
+            {
+                foreach (SystemGroup group in lateUpdateGroups)
                 {
-                    system.GetSystem<PreLateUpdate>().RemoveSystem<SystemsRoot>(false);
+                    group.OnDestroy(world);
                 }
+            }
 
-                if (lateUpdate != null)
+            if (fixedUpdateGroups != null)
+            {
+                foreach (SystemGroup group in fixedUpdateGroups)
                 {
-                    system.GetSystem<FixedUpdate>().RemoveSystem<SystemsRoot>(false);
+                    group.OnDestroy(world);
                 }
-            });
+            }
         }
 
         private IEnumerable<ISystem> GetSystemsRecursive(IEnumerable<ISystem> systemGroup)
@@ -133,35 +203,50 @@ namespace Abg.Entities
                 }
             }
         }
-        
+
         public IEnumerator<ISystem> GetEnumerator()
         {
-            if (earlyUpdate != null)
+            if (earlyUpdateGroups != null)
             {
-                foreach (ISystem system in GetSystemsRecursive(earlyUpdate))
+                foreach (SystemGroup group in earlyUpdateGroups)
                 {
-                    yield return system;
+                    foreach (ISystem system in GetSystemsRecursive(group))
+                    {
+                        yield return system;
+                    }
                 }
             }
-            if (update != null)
+
+            if (updateGroups != null)
             {
-                foreach (ISystem system in GetSystemsRecursive(update))
+                foreach (SystemGroup group in updateGroups)
                 {
-                    yield return system;
+                    foreach (ISystem system in GetSystemsRecursive(group))
+                    {
+                        yield return system;
+                    }
                 }
             }
-            if (lateUpdate != null)
+
+            if (lateUpdateGroups != null)
             {
-                foreach (ISystem system in GetSystemsRecursive(lateUpdate))
+                foreach (SystemGroup group in lateUpdateGroups)
                 {
-                    yield return system;
+                    foreach (ISystem system in GetSystemsRecursive(group))
+                    {
+                        yield return system;
+                    }
                 }
             }
-            if (fixedUpdate != null)
+
+            if (fixedUpdateGroups != null)
             {
-                foreach (ISystem system in GetSystemsRecursive(fixedUpdate))
+                foreach (SystemGroup group in fixedUpdateGroups)
                 {
-                    yield return system;
+                    foreach (ISystem system in GetSystemsRecursive(group))
+                    {
+                        yield return system;
+                    }
                 }
             }
         }
@@ -174,44 +259,74 @@ namespace Abg.Entities
 
     public class SystemsRootBuilder
     {
-        private SystemGroupBuilder earlyUpdateSystems;
-        private SystemGroupBuilder updateSystems;
-        private SystemGroupBuilder lateUpdateSystems;
-        private SystemGroupBuilder fixedUpdateSystems;
+        private List<(SystemGroupBuilder, SystemGroupType)> builders = new List<(SystemGroupBuilder, SystemGroupType)>();
 
-        public SystemsRoot Build(EntityWorld world) => new SystemsRoot(world,
-            earlyUpdateSystems?.Build(),
-            updateSystems?.Build(),
-            lateUpdateSystems?.Build(),
-            fixedUpdateSystems?.Build()
-        );
+        public SystemsRoot Build(EntityWorld world)
+        {
+            var systemsRoot = new SystemsRoot(world);
+
+            foreach (var (builder, type) in builders)
+            {
+                switch (type)
+                {
+                    case SystemGroupType.Update:
+                        systemsRoot.AddUpdateGroup(builder.Build());
+                        break;
+                    case SystemGroupType.EarlyUpdate:
+                        systemsRoot.AddEarlyUpdateGroup(builder.Build());
+                        break;
+                    case SystemGroupType.LateUpdate:
+                        systemsRoot.AddLateUpdateGroup(builder.Build());
+                        break;
+                    case SystemGroupType.FixedUpdate:
+                        systemsRoot.AddFixedUpdateGroup(builder.Build());
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+            }
+            
+            return systemsRoot;
+        }
 
         public SystemsRootBuilder OnEarlyUpdate(Action<SystemGroupBuilder> build)
         {
-            earlyUpdateSystems = new SystemGroupBuilder();
-            build(earlyUpdateSystems);
+            var builder = new SystemGroupBuilder();
+            builders.Add((builder, SystemGroupType.EarlyUpdate));
+            build(builder);
             return this;
         }
-        
+
         public SystemsRootBuilder OnUpdate(Action<SystemGroupBuilder> build)
         {
-            updateSystems = new SystemGroupBuilder();
-            build(updateSystems);
+            var builder = new SystemGroupBuilder();
+            builders.Add((builder, SystemGroupType.Update));
+            build(builder);
             return this;
         }
-        
+
         public SystemsRootBuilder OnLateUpdate(Action<SystemGroupBuilder> build)
         {
-            lateUpdateSystems = new SystemGroupBuilder();
-            build(lateUpdateSystems);
+            var builder = new SystemGroupBuilder();
+            builders.Add((builder, SystemGroupType.LateUpdate));
+            build(builder);
             return this;
         }
-        
+
         public SystemsRootBuilder OnFixedUpdate(Action<SystemGroupBuilder> build)
         {
-            fixedUpdateSystems = new SystemGroupBuilder();
-            build(fixedUpdateSystems);
+            var builder = new SystemGroupBuilder();
+            builders.Add((builder, SystemGroupType.FixedUpdate));
+            build(builder);
             return this;
+        }
+
+        private enum SystemGroupType
+        {
+            Update = 0,
+            EarlyUpdate = 1,
+            LateUpdate = 2,
+            FixedUpdate = 3,
         }
     }
 
@@ -221,8 +336,8 @@ namespace Abg.Entities
 
         internal SystemGroup Build()
         {
-            return new SystemGroup(systemsOrGroups.Select(o => o is SystemGroupBuilder builder 
-                ? builder.Build() 
+            return new SystemGroup(systemsOrGroups.Select(o => o is SystemGroupBuilder builder
+                ? builder.Build()
                 : (ISystem)o));
         }
 

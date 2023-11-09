@@ -1,9 +1,8 @@
 ﻿using System;
-using UnityEngine.LowLevel;
 
 namespace Abg
 {
-    public static class PlayerLoopExtensions
+    internal static class PlayerLoopExtensions
     {
         public delegate void ModifyPlayerLoop(ref UnityEngine.LowLevel.PlayerLoopSystem playerLoopSystem);
 
